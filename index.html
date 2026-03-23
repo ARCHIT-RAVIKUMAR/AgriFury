@@ -350,7 +350,7 @@
 <header>
   <div class="logo">
     <div class="logo-icon">🌿</div>
-    <div class="logo-text">Agri<span>Pulse</span></div>
+    <div class="logo-text">Agri<span>Fury</span></div>
   </div>
   <nav>
     <a href="#detect">Detect</a>
@@ -938,6 +938,323 @@ function show(id, visible) {
   document.getElementById(id).style.display = visible ? 'inline-flex' : 'none';
 }
 function delay(ms){ return new Promise(r=>setTimeout(r,ms)); }
+</script>
+
+<!-- ── CHATBOT ─────────────────────────────────────────────── -->
+<style>
+  /* Chat bubble button */
+  .chat-bubble {
+    position: fixed; bottom: 24px; left: 24px; z-index: 200;
+    height: 50px; border-radius: 50px;
+    background: var(--green-deep);
+    box-shadow: 0 4px 24px rgba(26,58,31,0.45);
+    border: none; cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    gap: 8px; padding: 0 18px 0 14px;
+    transition: all 0.3s;
+    animation: chatPulse 2.5s ease-in-out infinite;
+  }
+  @keyframes chatPulse {
+    0%,100% { box-shadow: 0 4px 24px rgba(26,58,31,0.45); }
+    50% { box-shadow: 0 4px 32px rgba(74,145,87,0.7); }
+  }
+  .chat-bubble:hover { background: var(--green-mid); transform: translateY(-2px); }
+  .chat-bubble-icon { font-size: 20px; }
+  .chat-bubble-label {
+    font-family: 'DM Sans', sans-serif;
+    font-size: 0.85rem; font-weight: 700;
+    color: #fff; white-space: nowrap;
+  }
+  .chat-bubble .notif {
+    position: absolute; top: -4px; right: -4px;
+    width: 18px; height: 18px; border-radius: 50%;
+    background: #ef4444; border: 2px solid white;
+    font-size: 0.65rem; color: white;
+    display: flex; align-items: center; justify-content: center;
+    font-weight: 700; animation: blink 1.5s infinite;
+  }
+
+  /* Chat window */
+  .chat-window {
+    position: fixed; bottom: 85px; left: 24px; z-index: 200;
+    width: 340px; max-width: calc(100vw - 48px);
+    background: #fff;
+    border-radius: 20px;
+    box-shadow: 0 12px 50px rgba(0,0,0,0.18);
+    display: none;
+    flex-direction: column;
+    overflow: hidden;
+    animation: chatPop 0.3s cubic-bezier(0.34,1.56,0.64,1);
+    max-height: 500px;
+  }
+  .chat-window.open { display: flex; }
+  @keyframes chatPop {
+    from { opacity:0; transform: scale(0.85) translateY(20px); }
+    to   { opacity:1; transform: scale(1) translateY(0); }
+  }
+
+  /* Chat header */
+  .chat-header {
+    background: var(--green-deep);
+    padding: 14px 16px;
+    display: flex; align-items: center; gap: 10px;
+  }
+  .chat-header-icon {
+    width: 36px; height: 36px; border-radius: 50%;
+    background: var(--green-fresh);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 18px; flex-shrink: 0;
+  }
+  .chat-header-info { flex: 1; }
+  .chat-header-name { font-size: 0.92rem; font-weight: 700; color: #fff; }
+  .chat-header-status { font-size: 0.75rem; color: rgba(255,255,255,0.65); display: flex; align-items: center; gap: 5px; }
+  .chat-online-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--green-light); }
+  .chat-close {
+    background: none; border: none; color: rgba(255,255,255,0.7);
+    font-size: 1.2rem; cursor: pointer; padding: 4px;
+    transition: color 0.2s;
+  }
+  .chat-close:hover { color: #fff; }
+
+  /* Chat messages */
+  .chat-messages {
+    flex: 1; overflow-y: auto; padding: 14px;
+    display: flex; flex-direction: column; gap: 10px;
+    min-height: 260px; max-height: 320px;
+    background: #f8faf8;
+  }
+  .chat-messages::-webkit-scrollbar { width: 4px; }
+  .chat-messages::-webkit-scrollbar-thumb { background: #c8d9ca; border-radius: 4px; }
+
+  .msg {
+    max-width: 85%; padding: 9px 13px;
+    border-radius: 14px; font-size: 0.85rem; line-height: 1.5;
+    animation: msgIn 0.2s ease;
+  }
+  @keyframes msgIn { from{opacity:0;transform:translateY(6px);} to{opacity:1;transform:none;} }
+
+  .msg.bot {
+    background: #fff; color: var(--text-dark);
+    border: 1px solid #e0eae0;
+    border-bottom-left-radius: 4px;
+    align-self: flex-start;
+  }
+  .msg.user {
+    background: var(--green-deep); color: #fff;
+    border-bottom-right-radius: 4px;
+    align-self: flex-end;
+  }
+  .msg.typing {
+    background: #fff; border: 1px solid #e0eae0;
+    align-self: flex-start; padding: 12px 16px;
+  }
+  .typing-dots { display: flex; gap: 4px; align-items: center; }
+  .typing-dots span {
+    width: 7px; height: 7px; border-radius: 50%;
+    background: var(--green-fresh); display: inline-block;
+    animation: typingBounce 1.2s infinite;
+  }
+  .typing-dots span:nth-child(2) { animation-delay: 0.2s; }
+  .typing-dots span:nth-child(3) { animation-delay: 0.4s; }
+  @keyframes typingBounce { 0%,60%,100%{transform:translateY(0);} 30%{transform:translateY(-6px);} }
+
+  /* Quick questions */
+  .quick-questions {
+    padding: 10px 14px 0;
+    display: flex; flex-wrap: wrap; gap: 6px;
+    background: #f8faf8;
+  }
+  .quick-btn {
+    background: #e8f5e9; border: 1px solid #c8e6c9;
+    color: var(--green-deep); border-radius: 50px;
+    padding: 5px 12px; font-size: 0.76rem; font-weight: 600;
+    cursor: pointer; transition: all 0.2s;
+    font-family: 'DM Sans', sans-serif;
+  }
+  .quick-btn:hover { background: var(--green-fresh); color: #fff; border-color: var(--green-fresh); }
+
+  /* Chat input */
+  .chat-input-area {
+    padding: 10px 12px;
+    border-top: 1px solid #eef2ee;
+    display: flex; gap: 8px; align-items: center;
+    background: #fff;
+  }
+  .chat-input {
+    flex: 1; border: 1.5px solid #dde7de; border-radius: 50px;
+    padding: 9px 14px; font-size: 0.85rem;
+    font-family: 'DM Sans', sans-serif;
+    outline: none; transition: border-color 0.2s;
+    background: #fafcfa;
+  }
+  .chat-input:focus { border-color: var(--green-fresh); }
+  .chat-send {
+    width: 36px; height: 36px; border-radius: 50%;
+    background: var(--green-deep); border: none;
+    color: #fff; font-size: 1rem; cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    transition: all 0.2s; flex-shrink: 0;
+  }
+  .chat-send:hover { background: var(--green-mid); transform: scale(1.05); }
+  .chat-send:disabled { background: #aaa; cursor: not-allowed; transform: none; }
+</style>
+
+<!-- Chat bubble -->
+<button class="chat-bubble" onclick="toggleChat()" id="chatBubble">
+  <span class="chat-bubble-icon">🌿</span>
+  <span class="chat-bubble-label">Ask AI</span>
+  <div class="notif" id="chatNotif">1</div>
+</button>
+
+<!-- Chat window -->
+<div class="chat-window" id="chatWindow">
+  <div class="chat-header">
+    <div class="chat-header-icon">🌿</div>
+    <div class="chat-header-info">
+      <div class="chat-header-name">AgriFury Assistant</div>
+      <div class="chat-header-status">
+        <div class="chat-online-dot"></div> Ask me anything about farming!
+      </div>
+    </div>
+    <button class="chat-close" onclick="toggleChat()">✕</button>
+  </div>
+
+  <div class="chat-messages" id="chatMessages">
+    <div class="msg bot">
+      👋 Hi! I'm your AgriFury farming assistant. Ask me anything about plant diseases, remedies, crop care or farming tips!
+    </div>
+  </div>
+
+  <div class="quick-questions" id="quickQuestions">
+    <button class="quick-btn" onclick="sendQuick('How to prevent Leaf Blight?')">🍃 Leaf Blight</button>
+    <button class="quick-btn" onclick="sendQuick('How to treat Chilli Anthracnose?')">🌶️ Chilli Disease</button>
+    <button class="quick-btn" onclick="sendQuick('Best fungicide for banana diseases?')">🍌 Banana</button>
+    <button class="quick-btn" onclick="sendQuick('How to improve soil health?')">🌱 Soil Tips</button>
+  </div>
+
+  <div class="chat-input-area">
+    <input class="chat-input" id="chatInput" type="text" placeholder="Ask a farming question..." />
+    <button class="chat-send" id="chatSendBtn" onclick="sendMessage()">➤</button>
+  </div>
+</div>
+
+<script>
+// ── CHATBOT ───────────────────────────────────────────────────
+const GEMINI_API_KEY = 'AIzaSyDX6znhPjJOGTiacothIChmVt4eToeBxgl';
+const GEMINI_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${GEMINI_API_KEY}`;
+
+const SYSTEM_PROMPT = `You are AgriFury Assistant, an expert AI farming assistant specializing in plant diseases, crop care, and agriculture — especially for Indian farmers in Kerala and South India.
+
+You help farmers with:
+- Plant disease identification and remedies
+- Fungicide and pesticide recommendations
+- Crop care tips for Tomato, Banana, Chilli, Ginger and other crops
+- Soil health and fertilization advice
+- Irrigation and water management
+- Organic and chemical treatment options
+- Seasonal farming tips
+
+Keep answers:
+- Short and practical (3-5 sentences max)
+- Simple language — farmer friendly
+- Specific with product names when possible
+- Always mention safety precautions for chemicals
+
+If asked something unrelated to farming, politely redirect to farming topics.`;
+
+let chatHistory = [];
+let chatOpen = false;
+
+function toggleChat() {
+  chatOpen = !chatOpen;
+  const win = document.getElementById('chatWindow');
+  const notif = document.getElementById('chatNotif');
+  win.classList.toggle('open', chatOpen);
+  if (chatOpen) {
+    notif.style.display = 'none';
+    document.getElementById('chatInput').focus();
+  }
+}
+
+function sendQuick(text) {
+  document.getElementById('chatInput').value = text;
+  sendMessage();
+}
+
+async function sendMessage() {
+  const input = document.getElementById('chatInput');
+  const text = input.value.trim();
+  if (!text) return;
+
+  input.value = '';
+  document.getElementById('chatSendBtn').disabled = true;
+
+  // Hide quick questions after first message
+  document.getElementById('quickQuestions').style.display = 'none';
+
+  // Add user message
+  addMessage(text, 'user');
+  chatHistory.push({ role: 'user', parts: [{ text }] });
+
+  // Show typing indicator
+  const typingId = addTyping();
+
+  try {
+    const response = await fetch(GEMINI_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        system_instruction: { parts: [{ text: SYSTEM_PROMPT }] },
+        contents: chatHistory,
+        generationConfig: { maxOutputTokens: 300, temperature: 0.7 }
+      })
+    });
+
+    const data = await response.json();
+    removeTyping(typingId);
+
+    const reply = data?.candidates?.[0]?.content?.parts?.[0]?.text || "Sorry, I couldn't process that. Please try again!";
+    addMessage(reply, 'bot');
+    chatHistory.push({ role: 'model', parts: [{ text: reply }] });
+
+    // Keep history to last 10 messages
+    if (chatHistory.length > 10) chatHistory = chatHistory.slice(-10);
+
+  } catch (err) {
+    removeTyping(typingId);
+    addMessage("Sorry, something went wrong. Please check your connection and try again!", 'bot');
+  }
+
+  document.getElementById('chatSendBtn').disabled = false;
+  input.focus();
+}
+
+function addMessage(text, type) {
+  const msgs = document.getElementById('chatMessages');
+  const div = document.createElement('div');
+  div.className = `msg ${type}`;
+  div.textContent = text;
+  msgs.appendChild(div);
+  msgs.scrollTop = msgs.scrollHeight;
+}
+
+function addTyping() {
+  const msgs = document.getElementById('chatMessages');
+  const id = 'typing-' + Date.now();
+  msgs.innerHTML += `<div class="msg typing" id="${id}"><div class="typing-dots"><span></span><span></span><span></span></div></div>`;
+  msgs.scrollTop = msgs.scrollHeight;
+  return id;
+}
+
+function removeTyping(id) {
+  const el = document.getElementById(id);
+  if (el) el.remove();
+}
+
+// Send on Enter key
+document.getElementById('chatInput').addEventListener('keydown', e => {
+  if (e.key === 'Enter') sendMessage();
+});
 </script>
 </body>
 </html>
