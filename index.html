@@ -1138,18 +1138,10 @@ function delay(ms){ return new Promise(r=>setTimeout(r,ms)); }
   </div>
 </div>
 
-<script type="importmap">
-{
-  "imports": {
-    "@google/generative-ai": "https://esm.run/@google/generative-ai"
-  }
-}
-</script>
-<script type="module">
-import { GoogleGenerativeAI } from "@google/generative-ai";
 
-// ── CHATBOT ───────────────────────────────────────────────────
-const GEMINI_API_KEY = 'AIzaSyBB82MkMfHVg_fxftzcgPa8YM1UjfUfJUo';
+<script>
+// ── CHATBOT (via Cloudflare Worker) ──────────────────────────
+const WORKER_URL = 'https://agrifury-chat.arlaptop2024.workers.dev/';
 
 const SYSTEM_PROMPT = `You are AgriFury Assistant, an expert AI farming assistant specializing in plant diseases, crop care, and agriculture — especially for Indian farmers in Kerala and South India.
 
@@ -1170,17 +1162,10 @@ Keep answers:
 
 If asked something unrelated to farming, politely redirect to farming topics.`;
 
-const genAI = new GoogleGenerativeAI(GEMINI_API_KEY);
-const geminiModel = genAI.getGenerativeModel({
-  model: 'gemini-2.5-flash',
-  systemInstruction: SYSTEM_PROMPT
-});
-
-let chatSession = geminiModel.startChat({ history: [] });
+let chatHistory = [];
 let chatOpen = false;
 
-// Expose functions globally so onclick works
-window.toggleChat = function() {
+function toggleChat() {
   chatOpen = !chatOpen;
   const win = document.getElementById('chatWindow');
   const notif = document.getElementById('chatNotif');
@@ -1191,12 +1176,12 @@ window.toggleChat = function() {
   }
 }
 
-window.sendQuick = function(text) {
+function sendQuick(text) {
   document.getElementById('chatInput').value = text;
-  window.sendChat();
+  sendChat();
 }
 
-window.sendChat = async function() {
+async function sendChat() {
   const input = document.getElementById('chatInput');
   const text = input.value.trim();
   if (!text) return;
@@ -1208,15 +1193,46 @@ window.sendChat = async function() {
   addMessage(text, 'user');
   const typingId = addTyping();
 
+  // First message includes system prompt, follow-ups use history
+  const userPart = chatHistory.length === 0
+    ? SYSTEM_PROMPT + '\n\nFarmer question: ' + text
+    : text;
+
+  const contents = [...chatHistory, { role: 'user', parts: [{ text: userPart }] }];
+
   try {
-    const result = await chatSession.sendMessage(text);
-    const reply = await result.response.text();
+    const response = await fetch(WORKER_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        contents,
+        generationConfig: { maxOutputTokens: 300, temperature: 0.7 }
+      })
+    });
+
+    const data = await response.json();
     removeTyping(typingId);
-    addMessage(reply, 'bot');
+
+    if (data?.candidates?.[0]?.content?.parts?.[0]?.text) {
+      const reply = data.candidates[0].content.parts[0].text;
+      addMessage(reply, 'bot');
+
+      // Save to history — strictly alternating user/model
+      chatHistory.push({ role: 'user', parts: [{ text: userPart }] });
+      chatHistory.push({ role: 'model', parts: [{ text: reply }] });
+
+      // Keep last 16 messages (8 exchanges)
+      if (chatHistory.length > 16) chatHistory = chatHistory.slice(-16);
+
+    } else {
+      console.error('Worker response:', JSON.stringify(data));
+      addMessage("Sorry, I couldn't get a response. Please try again!", 'bot');
+    }
+
   } catch (err) {
     removeTyping(typingId);
-    console.error('Gemini error:', err);
-    addMessage("Sorry, something went wrong. Please try again!", 'bot');
+    console.error('Worker error:', err);
+    addMessage("Connection error. Please check your internet and try again!", 'bot');
   }
 
   document.getElementById('chatSendBtn').disabled = false;
@@ -1247,7 +1263,7 @@ function removeTyping(id) {
 
 // Send on Enter key
 document.getElementById('chatInput').addEventListener('keydown', e => {
-  if (e.key === 'Enter') window.sendChat();
+  if (e.key === 'Enter') sendChat();
 });
 </script>
 </body>
