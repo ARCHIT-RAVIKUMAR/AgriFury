@@ -21,5 +21,5 @@ To develop a user-friendly assistant that identifies plant diseases through a sm
 
 
 ## 🔗 Live
-[Launch PlantDoc Live](https://archit-ravikumar.github.io/AgriFury/)
+[Launch PlantDoc Live](https://archit-ravikumar.github.io/PlantDoc/)
 :)
