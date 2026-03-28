@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>AgriFury – AI Plant Disease Detection</title>
+  <title>PlantDoc – AI Plant Disease Detection</title>
   <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700;900&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet"/>
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
@@ -522,7 +522,7 @@
 </section>
 
 <footer>
-  <strong>AgriFury</strong> · AI Farming Assistant · Powered by <strong>Teachable Machine</strong> + TensorFlow.js<br>
+  <strong>PlantDoc</strong> · AI Farming Assistant · Powered by <strong>Teachable Machine</strong> + TensorFlow.js<br>
   <small>Results are AI-based estimates. Always consult a local agronomist for critical decisions.</small>
 </footer>
 
@@ -1165,7 +1165,7 @@ function delay(ms){ return new Promise(r=>setTimeout(r,ms)); }
   <div class="chat-header">
     <div class="chat-header-icon">🌿</div>
     <div class="chat-header-info">
-      <div class="chat-header-name">AgriFury Assistant</div>
+      <div class="chat-header-name">PlantDoc Assistant</div>
       <div class="chat-header-status">
         <div class="chat-online-dot"></div> Ask me anything about farming!
       </div>
@@ -1183,7 +1183,7 @@ function delay(ms){ return new Promise(r=>setTimeout(r,ms)); }
 
   <div class="chat-messages" id="chatMessages">
     <div class="msg bot" id="chatWelcomeMsg">
-      👋 Hi! I'm your AgriFury farming assistant. Ask me anything about plant diseases, remedies, crop care or farming tips!
+      👋 Hi! I'm your PlantDoc farming assistant. Ask me anything about plant diseases, remedies, crop care or farming tips!
     </div>
   </div>
 
@@ -1211,11 +1211,11 @@ const LANG_NAMES = {
   en: 'English', ml: 'Malayalam', hi: 'Hindi', ta: 'Tamil', te: 'Telugu'
 };
 const WELCOME_MSGS = {
-  en: '👋 Hi! I\'m your AgriFury farming assistant. Ask me anything about plant diseases, remedies, crop care or farming tips!',
-  ml: '👋 നമസ്കാരം! ഞാൻ AgriFury കൃഷി സഹായി ആണ്. സസ്യ രോഗങ്ങൾ, പ്രതിവിധികൾ, വിള പരിചരണം എന്നിവയെ കുറിച്ച് ചോദിക്കൂ!',
-  hi: '👋 नमस्ते! मैं आपका AgriFury कृषि सहायक हूँ। पौधों की बीमारियों, उपचार और फसल देखभाल के बारे में पूछें!',
-  ta: '👋 வணக்கம்! நான் உங்கள் AgriFury வேளாண் உதவியாளர். தாவர நோய்கள், தீர்வுகள், பயிர் பராமரிப்பு பற்றி கேளுங்கள்!',
-  te: '👋 నమస్కారం! నేను మీ AgriFury వ్యవసాయ సహాయకుడిని. మొక్కల వ్యాధులు, నివారణలు, పంట సంరక్షణ గురించి అడగండి!'
+  en: '👋 Hi! I\'m your PlantDoc farming assistant. Ask me anything about plant diseases, remedies, crop care or farming tips!',
+  ml: '👋 നമസ്കാരം! ഞാൻ PlantDoc കൃഷി സഹായി ആണ്. സസ്യ രോഗങ്ങൾ, പ്രതിവിധികൾ, വിള പരിചരണം എന്നിവയെ കുറിച്ച് ചോദിക്കൂ!',
+  hi: '👋 नमस्ते! मैं आपका PlantDoc कृषि सहायक हूँ। पौधों की बीमारियों, उपचार और फसल देखभाल के बारे में पूछें!',
+  ta: '👋 வணக்கம்! நான் உங்கள் PlantDoc வேளாண் உதவியாளர். தாவர நோய்கள், தீர்வுகள், பயிர் பராமரிப்பு பற்றி கேளுங்கள்!',
+  te: '👋 నమస్కారం! నేను మీ PlantDoc వ్యవసాయ సహాయకుడిని. మొక్కల వ్యాధులు, నివారణలు, పంట సంరక్షణ గురించి అడగండి!'
 };
 const PLACEHOLDERS = {
   en: 'Ask a farming question...',
