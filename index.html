@@ -362,6 +362,9 @@
   <nav>
     <a href="#detect" id="navDetect">Detect</a>
     <a href="#tips" id="navTips">Tips</a>
+    <button onclick="toggleHistory()" id="historyNavBtn" style="background:rgba(255,255,255,0.1);border:1px solid rgba(255,255,255,0.3);color:#fff;border-radius:6px;padding:5px 12px;font-size:0.82rem;cursor:pointer;font-family:'DM Sans',sans-serif;margin-left:1rem;display:inline-flex;align-items:center;gap:6px;font-weight:600;transition:all 0.2s;">
+      📋 History <span id="historyCount" style="background:var(--green-fresh);color:#fff;border-radius:50px;padding:1px 7px;font-size:0.72rem;display:none;">0</span>
+    </button>
     <select id="siteLang" onchange="changeSiteLang()" title="Select Language" style="background:rgba(255,255,255,0.1);border:1px solid rgba(255,255,255,0.3);color:#fff;border-radius:6px;padding:4px 8px;font-size:0.82rem;cursor:pointer;font-family:'DM Sans',sans-serif;margin-left:1rem;outline:none;">
       <option value="en">🇬🇧 English</option>
       <option value="ml">🇮🇳 Malayalam</option>
@@ -945,6 +948,52 @@ function renderResults(predictions, source) {
   const rs=document.getElementById('resultsSection');
   rs.classList.add('visible');
   rs.scrollIntoView({behavior:'smooth',block:'start'});
+
+  // ── CONNECT SCAN TO CHATBOT ──────────────────────────────────
+  // Save scan context so chatbot can reference it
+  const remedySummary = remedy.remedies.map(r => r.title).join(', ');
+  lastScanResult = {
+    name: top.className,
+    confidence: (top.probability * 100).toFixed(1),
+    severity: remedy.severity,
+    desc: remedy.desc,
+    remedies: remedySummary,
+    source: source
+  };
+
+  // Auto-save to history
+  saveToHistory(lastScanResult);
+
+  // Reset chat history so the new scan context takes full effect
+  chatHistory = [];
+
+  // Update quick-question buttons to be disease-specific
+  const qqs = document.getElementById('quickQuestions');
+  qqs.innerHTML = `
+    <button class="quick-btn" onclick="sendQuick('How serious is ${top.className}?')">🔍 How serious?</button>
+    <button class="quick-btn" onclick="sendQuick('What are the best treatments for ${top.className}?')">💊 Best treatment</button>
+    <button class="quick-btn" onclick="sendQuick('How do I prevent ${top.className} from spreading?')">🛡️ Prevention</button>
+    <button class="quick-btn" onclick="sendQuick('Are there organic remedies for ${top.className}?')">🌿 Organic options</button>
+  `;
+  qqs.style.display = 'flex';
+
+  // Show scan-aware notification on chat bubble
+  const notif = document.getElementById('chatNotif');
+  notif.style.display = 'flex';
+  notif.textContent = '!';
+
+  // Auto-open chat after a short delay with a scan-aware greeting
+  setTimeout(() => {
+    if (!chatOpen) {
+      toggleChat();
+    }
+    // Clear previous welcome and inject scan-aware greeting
+    const msgs = document.getElementById('chatMessages');
+    msgs.innerHTML = '';
+    const severityEmoji = { high: '🔴', medium: '🟡', low: '🟢', healthy: '✅' }[remedy.severity] || '🌿';
+    const greeting = `${severityEmoji} I just analyzed your leaf scan!\n\nDetected: **${top.className}** (${(top.probability*100).toFixed(1)}% confidence)\nSeverity: ${remedy.severity.charAt(0).toUpperCase()+remedy.severity.slice(1)}\n\nI'm now fully aware of this diagnosis. Ask me anything about this disease — treatments, prevention, organic options, or anything else!`;
+    addMessage(greeting, 'bot');
+  }, 800);
 }
 
 // ── HELPERS ──────────────────────────────────────────────────
@@ -952,6 +1001,219 @@ function show(id, visible) {
   document.getElementById(id).style.display = visible ? 'inline-flex' : 'none';
 }
 function delay(ms){ return new Promise(r=>setTimeout(r,ms)); }
+</script>
+
+<!-- ── SCAN HISTORY PANEL ──────────────────────────────────── -->
+<style>
+  .history-overlay {
+    position: fixed; inset: 0; background: rgba(0,0,0,0.45);
+    z-index: 300; display: none; align-items: flex-start; justify-content: flex-end;
+    padding: 70px 1rem 1rem;
+    backdrop-filter: blur(2px);
+  }
+  .history-overlay.open { display: flex; }
+
+  .history-panel {
+    background: #fff; border-radius: 20px;
+    width: 360px; max-width: 100%;
+    max-height: calc(100vh - 90px);
+    display: flex; flex-direction: column;
+    box-shadow: 0 16px 60px rgba(0,0,0,0.25);
+    animation: historyPop 0.28s cubic-bezier(0.34,1.56,0.64,1);
+    overflow: hidden;
+  }
+  @keyframes historyPop {
+    from { opacity:0; transform: scale(0.9) translateY(-10px); }
+    to   { opacity:1; transform: none; }
+  }
+  .history-header {
+    background: var(--green-deep); padding: 16px 18px;
+    display: flex; align-items: center; justify-content: space-between;
+  }
+  .history-header-title {
+    font-family: 'Playfair Display', serif; font-size: 1.05rem;
+    color: #fff; display: flex; align-items: center; gap: 8px;
+  }
+  .history-header-actions { display: flex; gap: 8px; align-items: center; }
+  .history-clear-btn {
+    background: rgba(239,68,68,0.2); border: 1px solid rgba(239,68,68,0.4);
+    color: #fca5a5; border-radius: 6px; padding: 4px 10px;
+    font-size: 0.75rem; font-weight: 600; cursor: pointer;
+    font-family: 'DM Sans', sans-serif; transition: all 0.2s;
+  }
+  .history-clear-btn:hover { background: rgba(239,68,68,0.35); }
+  .history-close-btn {
+    background: none; border: none; color: rgba(255,255,255,0.7);
+    font-size: 1.2rem; cursor: pointer; padding: 2px 6px;
+    transition: color 0.2s;
+  }
+  .history-close-btn:hover { color: #fff; }
+
+  .history-body {
+    flex: 1; overflow-y: auto; padding: 14px;
+    display: flex; flex-direction: column; gap: 10px;
+    background: #f8faf8;
+  }
+  .history-body::-webkit-scrollbar { width: 4px; }
+  .history-body::-webkit-scrollbar-thumb { background: #c8d9ca; border-radius: 4px; }
+
+  .history-empty {
+    text-align: center; padding: 40px 20px;
+    color: var(--text-muted); font-size: 0.88rem; line-height: 1.7;
+  }
+  .history-empty-icon { font-size: 2.5rem; margin-bottom: 12px; display: block; opacity: 0.5; }
+
+  .history-item {
+    background: #fff; border: 1.5px solid #e0eae0;
+    border-radius: 14px; padding: 13px 14px;
+    cursor: pointer; transition: all 0.2s;
+    animation: fadeUp 0.3s ease both;
+  }
+  .history-item:hover { border-color: var(--green-fresh); box-shadow: 0 3px 14px rgba(74,145,87,0.12); transform: translateY(-1px); }
+  .history-item-top { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; margin-bottom: 6px; }
+  .history-item-name { font-size: 0.88rem; font-weight: 700; color: var(--green-deep); line-height: 1.3; }
+  .history-item-badge {
+    font-size: 0.68rem; font-weight: 700; padding: 2px 8px;
+    border-radius: 50px; white-space: nowrap; flex-shrink: 0;
+  }
+  .history-item-meta { font-size: 0.76rem; color: var(--text-muted); display: flex; gap: 10px; flex-wrap: wrap; }
+  .history-item-ask {
+    margin-top: 9px; font-size: 0.75rem; font-weight: 600;
+    color: var(--green-fresh); display: flex; align-items: center; gap: 4px;
+  }
+</style>
+
+<!-- History overlay -->
+<div class="history-overlay" id="historyOverlay" onclick="closeHistoryOnBg(event)">
+  <div class="history-panel" id="historyPanel">
+    <div class="history-header">
+      <div class="history-header-title">📋 Scan History</div>
+      <div class="history-header-actions">
+        <button class="history-clear-btn" onclick="clearHistory()">🗑 Clear All</button>
+        <button class="history-close-btn" onclick="toggleHistory()">✕</button>
+      </div>
+    </div>
+    <div class="history-body" id="historyBody">
+      <div class="history-empty">
+        <span class="history-empty-icon">🔬</span>
+        No scans yet.<br>Analyze a leaf to start your history!
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+// ── SCAN HISTORY ─────────────────────────────────────────────
+let scanHistory = JSON.parse(localStorage.getItem('plantdoc_history') || '[]');
+let historyOpen = false;
+
+function saveToHistory(result) {
+  const entry = {
+    id: Date.now(),
+    name: result.name,
+    confidence: result.confidence,
+    severity: result.severity,
+    desc: result.desc,
+    remedies: result.remedies,
+    source: result.source || 'upload',
+    timestamp: new Date().toISOString()
+  };
+  scanHistory.unshift(entry); // newest first
+  if (scanHistory.length > 50) scanHistory = scanHistory.slice(0, 50); // cap at 50
+  localStorage.setItem('plantdoc_history', JSON.stringify(scanHistory));
+  renderHistoryBadge();
+  renderHistoryList();
+}
+
+function renderHistoryBadge() {
+  const badge = document.getElementById('historyCount');
+  if (scanHistory.length > 0) {
+    badge.style.display = 'inline';
+    badge.textContent = scanHistory.length;
+  } else {
+    badge.style.display = 'none';
+  }
+}
+
+function renderHistoryList() {
+  const body = document.getElementById('historyBody');
+  if (scanHistory.length === 0) {
+    body.innerHTML = `<div class="history-empty"><span class="history-empty-icon">🔬</span>No scans yet.<br>Analyze a leaf to start your history!</div>`;
+    return;
+  }
+  const severityColors = {
+    high:    { bg:'#fee2e2', color:'#991b1b', label:'🔴 High' },
+    medium:  { bg:'#fef3c7', color:'#92400e', label:'🟡 Medium' },
+    low:     { bg:'#dcfce7', color:'#166534', label:'🟢 Low' },
+    healthy: { bg:'#dcfce7', color:'#166534', label:'✅ Healthy' }
+  };
+  body.innerHTML = scanHistory.map((entry, i) => {
+    const sv = severityColors[entry.severity] || severityColors.low;
+    const date = new Date(entry.timestamp);
+    const dateStr = date.toLocaleDateString('en-IN', { day:'numeric', month:'short' });
+    const timeStr = date.toLocaleTimeString('en-IN', { hour:'2-digit', minute:'2-digit' });
+    const srcIcon = entry.source === 'camera' ? '📷' : '📁';
+    return `
+      <div class="history-item" onclick="loadHistoryEntry(${i})" style="animation-delay:${i*0.04}s">
+        <div class="history-item-top">
+          <div class="history-item-name">${entry.name}</div>
+          <span class="history-item-badge" style="background:${sv.bg};color:${sv.color}">${sv.label}</span>
+        </div>
+        <div class="history-item-meta">
+          <span>${srcIcon} ${entry.source === 'camera' ? 'Camera' : 'Upload'}</span>
+          <span>🎯 ${entry.confidence}%</span>
+          <span>📅 ${dateStr}, ${timeStr}</span>
+        </div>
+        <div class="history-item-ask">💬 Tap to ask AI about this →</div>
+      </div>`;
+  }).join('');
+}
+
+function loadHistoryEntry(index) {
+  const entry = scanHistory[index];
+  // Load into chatbot context
+  lastScanResult = entry;
+  chatHistory = [];
+  // Update quick questions
+  const qqs = document.getElementById('quickQuestions');
+  qqs.innerHTML = `
+    <button class="quick-btn" onclick="sendQuick('How serious is ${entry.name}?')">🔍 How serious?</button>
+    <button class="quick-btn" onclick="sendQuick('Best treatments for ${entry.name}?')">💊 Best treatment</button>
+    <button class="quick-btn" onclick="sendQuick('How to prevent ${entry.name}?')">🛡️ Prevention</button>
+    <button class="quick-btn" onclick="sendQuick('Organic options for ${entry.name}?')">🌿 Organic</button>
+  `;
+  qqs.style.display = 'flex';
+  // Close history, open chat with context
+  toggleHistory();
+  if (!chatOpen) toggleChat();
+  const msgs = document.getElementById('chatMessages');
+  msgs.innerHTML = '';
+  const sv = { high:'🔴', medium:'🟡', low:'🟢', healthy:'✅' }[entry.severity] || '🌿';
+  const date = new Date(entry.timestamp);
+  const dateStr = date.toLocaleDateString('en-IN', { day:'numeric', month:'short', year:'numeric' });
+  addMessage(`${sv} Loading past scan from ${dateStr}:\n\n**${entry.name}** (${entry.confidence}% confidence)\nSeverity: ${entry.severity.charAt(0).toUpperCase()+entry.severity.slice(1)}\n\nI'm ready to answer questions about this diagnosis!`, 'bot');
+}
+
+function clearHistory() {
+  if (!confirm('Clear all scan history? This cannot be undone.')) return;
+  scanHistory = [];
+  localStorage.removeItem('plantdoc_history');
+  renderHistoryBadge();
+  renderHistoryList();
+}
+
+function toggleHistory() {
+  historyOpen = !historyOpen;
+  document.getElementById('historyOverlay').classList.toggle('open', historyOpen);
+}
+
+function closeHistoryOnBg(e) {
+  if (e.target === document.getElementById('historyOverlay')) toggleHistory();
+}
+
+// Init badge on load
+renderHistoryBadge();
+renderHistoryList();
 </script>
 
 <!-- ── CHATBOT ─────────────────────────────────────────────── -->
@@ -1248,9 +1510,14 @@ IMPORTANT: Always reply in {LANGUAGE}. Even if the user writes in another langua
 let chatHistory = [];
 let chatOpen = false;
 let currentLang = 'en';
+let lastScanResult = null; // Stores the latest scan so chatbot can reference it
 
 function getSystemPrompt() {
-  return SYSTEM_PROMPT.replace(/{LANGUAGE}/g, LANG_NAMES[currentLang]);
+  let prompt = SYSTEM_PROMPT.replace(/{LANGUAGE}/g, LANG_NAMES[currentLang]);
+  if (lastScanResult) {
+    prompt += `\n\nCURRENT SCAN CONTEXT: The farmer just scanned a leaf and the AI detected: "${lastScanResult.name}" with ${lastScanResult.confidence}% confidence (${lastScanResult.severity} severity). Description: ${lastScanResult.desc}. Remedies suggested: ${lastScanResult.remedies}.\nWhen the farmer asks about "this disease", "what I scanned", "my plant", or similar — refer to this scan result directly. Be specific and helpful about THIS detected condition.`;
+  }
+  return prompt;
 }
 
 function changeChatLang() {
@@ -1691,4 +1958,3 @@ document.getElementById('chatInput').addEventListener('keydown', e => {
 </script>
 </body>
 </html>
-
