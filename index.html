@@ -508,6 +508,19 @@
 
       <div class="prob-label">Recommended Remedies</div>
       <div class="remedy-grid" id="remedyGrid"></div>
+
+      <!-- DOWNLOAD CARD BUTTON -->
+      <div style="margin-top:1.5rem;display:flex;gap:10px;flex-wrap:wrap;">
+        <button class="btn btn-primary" onclick="downloadResultCard()" id="downloadBtn">
+          📥 Download Result Card
+        </button>
+        <button class="btn btn-secondary" onclick="toggleHistory()" style="border-color:var(--green-fresh);color:var(--green-fresh);">
+          📋 View Scan History
+        </button>
+      </div>
+
+      <!-- Hidden canvas for card generation -->
+      <canvas id="resultCardCanvas" style="display:none;"></canvas>
     </div>
 
   </div>
@@ -964,8 +977,16 @@ function renderResults(predictions, source) {
   // Auto-save to history
   saveToHistory(lastScanResult);
 
-  // Reset chat history so the new scan context takes full effect
-  chatHistory = [];
+  // Save to scan history
+  saveToHistory({
+    name: top.className,
+    confidence: (top.probability * 100).toFixed(1),
+    severity: remedy.severity,
+    icon: remedy.icon,
+    source,
+    timestamp: new Date().toISOString(),
+    imageData: source === 'upload' ? (document.getElementById('previewImg').src || null) : (capturedDataURL || null)
+  });
 
   // Update quick-question buttons to be disease-specific
   const qqs = document.getElementById('quickQuestions');
@@ -1001,6 +1022,229 @@ function show(id, visible) {
   document.getElementById(id).style.display = visible ? 'inline-flex' : 'none';
 }
 function delay(ms){ return new Promise(r=>setTimeout(r,ms)); }
+
+// ── SCAN HISTORY ─────────────────────────────────────────────
+let scanHistory = JSON.parse(localStorage.getItem('plantdoc_history') || '[]');
+
+function saveToHistory(entry) {
+  scanHistory.unshift(entry); // newest first
+  if (scanHistory.length > 50) scanHistory = scanHistory.slice(0, 50);
+  localStorage.setItem('plantdoc_history', JSON.stringify(scanHistory));
+  updateHistoryBadge();
+}
+
+function updateHistoryBadge() {
+  const badge = document.getElementById('historyCount');
+  if (scanHistory.length > 0) {
+    badge.style.display = 'inline';
+    badge.textContent = scanHistory.length;
+  } else {
+    badge.style.display = 'none';
+  }
+}
+
+function toggleHistory() {
+  const overlay = document.getElementById('historyOverlay');
+  const isOpen = overlay.classList.contains('open');
+  overlay.classList.toggle('open', !isOpen);
+  if (!isOpen) renderHistory();
+}
+
+function renderHistory() {
+  const list = document.getElementById('historyBody');
+  if (scanHistory.length === 0) {
+    list.innerHTML = `<div class="history-empty"><span class="history-empty-icon">🔬</span>No scans yet.<br>Analyze a leaf to start your history!</div>`;
+    return;
+  }
+  const severityColor = { high:'#fee2e2', medium:'#fef3c7', low:'#dcfce7', healthy:'#dcfce7' };
+  const severityText  = { high:'#991b1b', medium:'#92400e', low:'#166534', healthy:'#166534' };
+  const severityLabel = { high:'🔴 High', medium:'🟡 Medium', low:'🟢 Low', healthy:'✅ Healthy' };
+
+  list.innerHTML = scanHistory.map((entry, i) => {
+    const date = new Date(entry.timestamp);
+    const dateStr = date.toLocaleDateString('en-IN', { day:'numeric', month:'short' });
+    const timeStr = date.toLocaleTimeString('en-IN', { hour:'2-digit', minute:'2-digit' });
+    return `
+      <div class="history-item" onclick="loadHistoryEntry(${i})" style="animation-delay:${i*0.04}s">
+        <div class="history-item-top">
+          <div class="history-item-name">${entry.name}</div>
+          <span class="history-item-badge" style="background:${severityColor[entry.severity]||'#dcfce7'};color:${severityText[entry.severity]||'#166534'}">${severityLabel[entry.severity]||entry.severity}</span>
+        </div>
+        <div class="history-item-meta">
+          <span>${entry.source === 'camera' ? '📷 Camera' : '📁 Upload'}</span>
+          <span>🎯 ${entry.confidence}%</span>
+          <span>📅 ${dateStr}, ${timeStr}</span>
+        </div>
+        <div class="history-item-ask">💬 Tap to ask AI about this →</div>
+      </div>`;
+  }).join('');
+}
+
+function clearHistory() {
+  if (!confirm('Clear all scan history? This cannot be undone.')) return;
+  scanHistory = [];
+  localStorage.removeItem('plantdoc_history');
+  updateHistoryBadge();
+  renderHistory();
+}
+
+// Initialize badge on load
+updateHistoryBadge();
+
+// ── DOWNLOAD RESULT CARD ─────────────────────────────────────
+async function downloadResultCard() {
+  const btn = document.getElementById('downloadBtn');
+  btn.textContent = '⏳ Generating...';
+  btn.disabled = true;
+
+  const canvas = document.getElementById('resultCardCanvas');
+  const ctx = canvas.getContext('2d');
+  const W = 800, H = 480;
+  canvas.width = W; canvas.height = H;
+
+  const diseaseName = document.getElementById('diseaseName').textContent;
+  const diseaseDesc = document.getElementById('diseaseDesc').textContent;
+  const confidence  = document.getElementById('confidencePill').textContent;
+  const severity    = lastScanResult?.severity || 'low';
+  const icon        = document.getElementById('diseaseIcon').textContent;
+  const latin       = document.getElementById('diseaseLatin').textContent;
+  const remedyTitles = [...document.querySelectorAll('.remedy-title')].map(e=>e.textContent).join('  ·  ');
+  const now = new Date().toLocaleDateString('en-IN', { day:'numeric', month:'long', year:'numeric' });
+
+  const severityBg = { high:'#991b1b', medium:'#92400e', low:'#166534', healthy:'#166534' };
+  const cardBg     = { high:'#fff5f5', medium:'#fffbeb', low:'#f0fdf4', healthy:'#f0fdf4' };
+  const accentColor = severityBg[severity] || '#166534';
+
+  // Background
+  ctx.fillStyle = cardBg[severity] || '#f0fdf4';
+  ctx.fillRect(0, 0, W, H);
+
+  // Left accent bar
+  ctx.fillStyle = accentColor;
+  ctx.fillRect(0, 0, 8, H);
+
+  // Header strip
+  ctx.fillStyle = '#1a3a1f';
+  ctx.fillRect(0, 0, W, 70);
+
+  // Logo text
+  ctx.fillStyle = '#f5f0e8';
+  ctx.font = 'bold 26px serif';
+  ctx.fillText('🌿 PlantDoc', 30, 45);
+
+  // Date
+  ctx.fillStyle = 'rgba(245,240,232,0.6)';
+  ctx.font = '14px sans-serif';
+  ctx.textAlign = 'right';
+  ctx.fillText(now, W - 30, 45);
+  ctx.textAlign = 'left';
+
+  // Scan result label
+  ctx.fillStyle = accentColor;
+  ctx.font = 'bold 11px sans-serif';
+  ctx.fillText('SCAN RESULT', 30, 105);
+
+  // Disease name
+  ctx.fillStyle = '#1a1a1a';
+  ctx.font = 'bold 32px serif';
+  ctx.fillText(diseaseName, 30, 148);
+
+  // Latin name
+  ctx.fillStyle = '#6b7c6e';
+  ctx.font = 'italic 15px sans-serif';
+  ctx.fillText(latin, 30, 172);
+
+  // Severity badge
+  ctx.fillStyle = accentColor;
+  ctx.beginPath();
+  ctx.roundRect(30, 186, 140, 28, 14);
+  ctx.fill();
+  ctx.fillStyle = '#fff';
+  ctx.font = 'bold 12px sans-serif';
+  ctx.fillText(severity.toUpperCase() + ' SEVERITY', 42, 205);
+
+  // Confidence
+  ctx.fillStyle = 'rgba(26,58,31,0.1)';
+  ctx.beginPath();
+  ctx.roundRect(185, 186, 150, 28, 14);
+  ctx.fill();
+  ctx.fillStyle = '#1a3a1f';
+  ctx.font = 'bold 12px sans-serif';
+  ctx.fillText('🎯 ' + confidence, 197, 205);
+
+  // Description
+  ctx.fillStyle = '#444';
+  ctx.font = '14px sans-serif';
+  const words = diseaseDesc.split(' ');
+  let line = '', y = 252;
+  for (const word of words) {
+    const test = line + word + ' ';
+    if (ctx.measureText(test).width > 500 && line) {
+      ctx.fillText(line, 30, y); line = word + ' '; y += 22;
+      if (y > 320) { ctx.fillText(line + '...', 30, y); break; }
+    } else { line = test; }
+  }
+  if (y <= 320) ctx.fillText(line, 30, y);
+
+  // Remedies label
+  ctx.fillStyle = '#1a3a1f';
+  ctx.font = 'bold 12px sans-serif';
+  ctx.fillText('💊 RECOMMENDED: ' + (remedyTitles || '—'), 30, 360);
+
+  // Divider
+  ctx.strokeStyle = 'rgba(0,0,0,0.08)';
+  ctx.lineWidth = 1;
+  ctx.beginPath(); ctx.moveTo(30, 375); ctx.lineTo(W-30, 375); ctx.stroke();
+
+  // Footer
+  ctx.fillStyle = '#6b7c6e';
+  ctx.font = '12px sans-serif';
+  ctx.fillText('Generated by PlantDoc AI · Results are estimates — consult a local agronomist for critical decisions.', 30, 400);
+
+  // Leaf image (if available)
+  const imgSrc = lastScanResult?.source === 'camera' ? capturedDataURL : document.getElementById('previewImg').src;
+  if (imgSrc && imgSrc !== window.location.href) {
+    await new Promise(resolve => {
+      const img = new Image();
+      img.crossOrigin = 'anonymous';
+      img.onload = () => {
+        // Right side image box
+        ctx.save();
+        ctx.beginPath();
+        ctx.roundRect(W-210, 80, 180, 180, 16);
+        ctx.clip();
+        ctx.drawImage(img, W-210, 80, 180, 180);
+        ctx.restore();
+        // Border
+        ctx.strokeStyle = accentColor;
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.roundRect(W-210, 80, 180, 180, 16);
+        ctx.stroke();
+        resolve();
+      };
+      img.onerror = resolve;
+      img.src = imgSrc;
+    });
+  } else {
+    // Fallback icon box
+    ctx.fillStyle = 'rgba(0,0,0,0.05)';
+    ctx.beginPath(); ctx.roundRect(W-210, 80, 180, 180, 16); ctx.fill();
+    ctx.font = '60px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText(icon, W-120, 185);
+    ctx.textAlign = 'left';
+  }
+
+  // Download
+  const link = document.createElement('a');
+  link.download = `PlantDoc_${diseaseName.replace(/\s+/g,'_')}_${Date.now()}.png`;
+  link.href = canvas.toDataURL('image/png');
+  link.click();
+
+  btn.textContent = '📥 Download Result Card';
+  btn.disabled = false;
+}
 </script>
 
 <!-- ── SCAN HISTORY PANEL ──────────────────────────────────── -->
@@ -1102,119 +1346,7 @@ function delay(ms){ return new Promise(r=>setTimeout(r,ms)); }
   </div>
 </div>
 
-<script>
-// ── SCAN HISTORY ─────────────────────────────────────────────
-let scanHistory = JSON.parse(localStorage.getItem('plantdoc_history') || '[]');
-let historyOpen = false;
 
-function saveToHistory(result) {
-  const entry = {
-    id: Date.now(),
-    name: result.name,
-    confidence: result.confidence,
-    severity: result.severity,
-    desc: result.desc,
-    remedies: result.remedies,
-    source: result.source || 'upload',
-    timestamp: new Date().toISOString()
-  };
-  scanHistory.unshift(entry); // newest first
-  if (scanHistory.length > 50) scanHistory = scanHistory.slice(0, 50); // cap at 50
-  localStorage.setItem('plantdoc_history', JSON.stringify(scanHistory));
-  renderHistoryBadge();
-  renderHistoryList();
-}
-
-function renderHistoryBadge() {
-  const badge = document.getElementById('historyCount');
-  if (scanHistory.length > 0) {
-    badge.style.display = 'inline';
-    badge.textContent = scanHistory.length;
-  } else {
-    badge.style.display = 'none';
-  }
-}
-
-function renderHistoryList() {
-  const body = document.getElementById('historyBody');
-  if (scanHistory.length === 0) {
-    body.innerHTML = `<div class="history-empty"><span class="history-empty-icon">🔬</span>No scans yet.<br>Analyze a leaf to start your history!</div>`;
-    return;
-  }
-  const severityColors = {
-    high:    { bg:'#fee2e2', color:'#991b1b', label:'🔴 High' },
-    medium:  { bg:'#fef3c7', color:'#92400e', label:'🟡 Medium' },
-    low:     { bg:'#dcfce7', color:'#166534', label:'🟢 Low' },
-    healthy: { bg:'#dcfce7', color:'#166534', label:'✅ Healthy' }
-  };
-  body.innerHTML = scanHistory.map((entry, i) => {
-    const sv = severityColors[entry.severity] || severityColors.low;
-    const date = new Date(entry.timestamp);
-    const dateStr = date.toLocaleDateString('en-IN', { day:'numeric', month:'short' });
-    const timeStr = date.toLocaleTimeString('en-IN', { hour:'2-digit', minute:'2-digit' });
-    const srcIcon = entry.source === 'camera' ? '📷' : '📁';
-    return `
-      <div class="history-item" onclick="loadHistoryEntry(${i})" style="animation-delay:${i*0.04}s">
-        <div class="history-item-top">
-          <div class="history-item-name">${entry.name}</div>
-          <span class="history-item-badge" style="background:${sv.bg};color:${sv.color}">${sv.label}</span>
-        </div>
-        <div class="history-item-meta">
-          <span>${srcIcon} ${entry.source === 'camera' ? 'Camera' : 'Upload'}</span>
-          <span>🎯 ${entry.confidence}%</span>
-          <span>📅 ${dateStr}, ${timeStr}</span>
-        </div>
-        <div class="history-item-ask">💬 Tap to ask AI about this →</div>
-      </div>`;
-  }).join('');
-}
-
-function loadHistoryEntry(index) {
-  const entry = scanHistory[index];
-  // Load into chatbot context
-  lastScanResult = entry;
-  chatHistory = [];
-  // Update quick questions
-  const qqs = document.getElementById('quickQuestions');
-  qqs.innerHTML = `
-    <button class="quick-btn" onclick="sendQuick('How serious is ${entry.name}?')">🔍 How serious?</button>
-    <button class="quick-btn" onclick="sendQuick('Best treatments for ${entry.name}?')">💊 Best treatment</button>
-    <button class="quick-btn" onclick="sendQuick('How to prevent ${entry.name}?')">🛡️ Prevention</button>
-    <button class="quick-btn" onclick="sendQuick('Organic options for ${entry.name}?')">🌿 Organic</button>
-  `;
-  qqs.style.display = 'flex';
-  // Close history, open chat with context
-  toggleHistory();
-  if (!chatOpen) toggleChat();
-  const msgs = document.getElementById('chatMessages');
-  msgs.innerHTML = '';
-  const sv = { high:'🔴', medium:'🟡', low:'🟢', healthy:'✅' }[entry.severity] || '🌿';
-  const date = new Date(entry.timestamp);
-  const dateStr = date.toLocaleDateString('en-IN', { day:'numeric', month:'short', year:'numeric' });
-  addMessage(`${sv} Loading past scan from ${dateStr}:\n\n**${entry.name}** (${entry.confidence}% confidence)\nSeverity: ${entry.severity.charAt(0).toUpperCase()+entry.severity.slice(1)}\n\nI'm ready to answer questions about this diagnosis!`, 'bot');
-}
-
-function clearHistory() {
-  if (!confirm('Clear all scan history? This cannot be undone.')) return;
-  scanHistory = [];
-  localStorage.removeItem('plantdoc_history');
-  renderHistoryBadge();
-  renderHistoryList();
-}
-
-function toggleHistory() {
-  historyOpen = !historyOpen;
-  document.getElementById('historyOverlay').classList.toggle('open', historyOpen);
-}
-
-function closeHistoryOnBg(e) {
-  if (e.target === document.getElementById('historyOverlay')) toggleHistory();
-}
-
-// Init badge on load
-renderHistoryBadge();
-renderHistoryList();
-</script>
 
 <!-- ── CHATBOT ─────────────────────────────────────────────── -->
 <style>
