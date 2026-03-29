@@ -974,9 +974,6 @@ function renderResults(predictions, source) {
     source: source
   };
 
-  // Auto-save to history
-  saveToHistory(lastScanResult);
-
   // Save to scan history
   saveToHistory({
     name: top.className,
@@ -1062,8 +1059,8 @@ function renderHistory() {
 
   list.innerHTML = scanHistory.map((entry, i) => {
     const date = new Date(entry.timestamp);
-    const dateStr = date.toLocaleDateString('en-IN', { day:'numeric', month:'short' });
-    const timeStr = date.toLocaleTimeString('en-IN', { hour:'2-digit', minute:'2-digit' });
+    const dateStr = isNaN(date) ? '—' : date.toLocaleDateString('en-IN', { day:'numeric', month:'short' });
+    const timeStr = isNaN(date) ? '' : date.toLocaleTimeString('en-IN', { hour:'2-digit', minute:'2-digit' });
     return `
       <div class="history-item" onclick="loadHistoryEntry(${i})" style="animation-delay:${i*0.04}s">
         <div class="history-item-top">
@@ -1080,6 +1077,37 @@ function renderHistory() {
   }).join('');
 }
 
+function loadHistoryEntry(index) {
+  const entry = scanHistory[index];
+  if (!entry) return;
+
+  // Load into chatbot context
+  lastScanResult = entry;
+  chatHistory = [];
+
+  // Update quick questions to match this disease
+  const qqs = document.getElementById('quickQuestions');
+  qqs.innerHTML = `
+    <button class="quick-btn" onclick="sendQuick('How serious is ${entry.name}?')">🔍 How serious?</button>
+    <button class="quick-btn" onclick="sendQuick('Best treatments for ${entry.name}?')">💊 Best treatment</button>
+    <button class="quick-btn" onclick="sendQuick('How to prevent ${entry.name}?')">🛡️ Prevention</button>
+    <button class="quick-btn" onclick="sendQuick('Organic options for ${entry.name}?')">🌿 Organic</button>
+  `;
+  qqs.style.display = 'flex';
+
+  // Close history panel, open chat
+  toggleHistory();
+  if (!chatOpen) toggleChat();
+
+  // Show context-aware greeting in chat
+  const msgs = document.getElementById('chatMessages');
+  msgs.innerHTML = '';
+  const sv = { high:'🔴', medium:'🟡', low:'🟢', healthy:'✅' }[entry.severity] || '🌿';
+  const date = new Date(entry.timestamp);
+  const dateStr = isNaN(date) ? 'past scan' : date.toLocaleDateString('en-IN', { day:'numeric', month:'short', year:'numeric' });
+  addMessage(`${sv} Loaded your past scan from ${dateStr}:\n\n${entry.name} (${entry.confidence}% confidence)\nSeverity: ${entry.severity.charAt(0).toUpperCase()+entry.severity.slice(1)}\n\nI'm ready to answer any questions about this diagnosis!`, 'bot');
+}
+
 function clearHistory() {
   if (!confirm('Clear all scan history? This cannot be undone.')) return;
   scanHistory = [];
@@ -1090,6 +1118,10 @@ function clearHistory() {
 
 // Initialize badge on load
 updateHistoryBadge();
+
+function closeHistoryOnBg(e) {
+  if (e.target === document.getElementById('historyOverlay')) toggleHistory();
+}
 
 // ── DOWNLOAD RESULT CARD ─────────────────────────────────────
 async function downloadResultCard() {
